@@ -1,0 +1,59 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Create Android project
+        run: |
+          npx cap add android
+          npx capacitor-assets generate --android
+          node scripts/patch-android.js
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk PilgerCut-v1.0.${{ github.run_number }}.apk
+
+      - name: Upload APK (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PilgerCut-v1.0.${{ github.run_number }}
+          path: PilgerCut-v1.0.${{ github.run_number }}.apk
+
+      - name: Publish Release (direct download link)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: طول برش پیلگر v1.0.${{ github.run_number }}
+          files: PilgerCut-v1.0.${{ github.run_number }}.apk
